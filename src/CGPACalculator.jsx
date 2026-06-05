@@ -1462,6 +1462,24 @@ const AdminDashboard = ({ onLogout }) => {
     setUsers(p=>p.map(u=>u.reg_no===regNo?{...u,status:"pending"}:u));
   };
 
+  const revoke = async (regNo) => {
+  if (!window.confirm(`Revoke access for ${regNo}?`)) return;
+  await supabase.from("users").update({ status:"pending" }).eq("reg_no",regNo);
+  setUsers(p=>p.map(u=>u.reg_no===regNo?{...u,status:"pending"}:u));
+};
+
+const deleteUser = async (regNo) => {
+  if (!window.confirm(`Permanently delete ${regNo} and all their data?`)) return;
+  await supabase.from("receipts").delete().eq("reg_no", regNo);
+  const { data: files } = await supabase.storage.from("receipts").list(regNo);
+  if (files?.length) {
+    const paths = files.map(f => `${regNo}/${f.name}`);
+    await supabase.storage.from("receipts").remove(paths);
+  }
+  await supabase.from("users").delete().eq("reg_no", regNo);
+  setUsers(p => p.filter(u => u.reg_no !== regNo));
+};
+
   const getReceiptUrl = async (path) => {
     const { data } = await supabase.storage.from("receipts").createSignedUrl(path,60);
     if (data?.signedUrl) setViewReceipt(data.signedUrl);
@@ -1516,6 +1534,7 @@ const AdminDashboard = ({ onLogout }) => {
                 {userReceipts.length>0&&(<button style={{ ...F.ghostBtn, padding:"5px 12px", fontSize:"0.72rem", color:"#0284c7", borderColor:"#bae6fd" }} onClick={()=>getReceiptUrl(userReceipts[0].receipt_url)}>📎 View Receipt</button>)}
                 {isPending&&(<button style={{ background:"#059669", color:"#fff", border:"none", borderRadius:8, padding:"7px 16px", fontSize:"0.8rem", fontWeight:800, cursor:"pointer", fontFamily:"var(--body)", opacity:approving===u.reg_no?0.6:1 }} onClick={()=>approve(u.reg_no)} disabled={approving===u.reg_no}>{approving===u.reg_no?"Approving…":"✓ Approve"}</button>)}
                 {isApproved&&(<button style={{ ...F.ghostBtn, padding:"5px 12px", fontSize:"0.72rem", color:"#dc2626", borderColor:"#fecaca" }} onClick={()=>revoke(u.reg_no)}>Revoke</button>)}
+                <button style={{ ...F.ghostBtn, padding:"5px 12px", fontSize:"0.72rem", color:"#dc2626", borderColor:"#fecaca", background:"#fef2f2" }} onClick={()=>deleteUser(u.reg_no)}>🗑 Delete</button>
               </div>
             </div>
             {userReceipts.length===0&&isPending&&(<div style={{ marginTop:10, fontSize:"0.72rem", color:"#f59e0b", background:"#fffbeb", border:"1px solid #fde68a", borderRadius:6, padding:"5px 10px", display:"inline-block" }}>⚠ No receipt uploaded yet</div>)}
