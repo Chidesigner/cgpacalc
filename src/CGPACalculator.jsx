@@ -1218,6 +1218,9 @@ const Dashboard = ({ regNo, userData, isTrial, onLogout, onPay }) => {
   }, [userData, regNo]);
 
   const currentList = semesters[mode]||[];
+  // Count unique sessions added (not semesters)
+const uniqueSessions = [...new Set(currentList.map(s => s.session))];
+const trialLimitReached = isTrial && uniqueSessions.length >= 1;
   const savedList = currentList.filter(s=>s.courses?.length>0);
   const cgpa = computeCGPA(savedList); const cl = classify(cgpa);
 
@@ -1355,13 +1358,20 @@ const Dashboard = ({ regNo, userData, isTrial, onLogout, onPay }) => {
           <div style={{ fontSize:"3rem", marginBottom:12 }}>📚</div>
           <div style={{ fontWeight:700, fontSize:"1rem", color:"#374151", marginBottom:6 }}>No semesters yet</div>
           <div style={{ fontSize:"0.84rem", color:"#94a3b8", marginBottom:20 }}>Add a session to get started. Add whichever semesters you have results for — in any order.</div>
-          <button style={{ ...F.primaryBtn, width:"auto", padding:"12px 24px", display:"inline-block" }} onClick={()=>setShowModal(true)}>+ Add Session →</button>
+          <button style={{ ...F.primaryBtn, width:"auto", padding:"12px 24px", display:"inline-block", opacity: trialLimitReached ? 0.5 : 1, cursor: trialLimitReached ? "not-allowed" : "pointer" }} onClick={()=>{ if(!trialLimitReached) setShowModal(true); }}>+ Add Session →</button>
         </div>
       ):(
         <>
           {sorted.map(s=>(<SemesterForm key={s.semKey} semKey={s.semKey} level={s.level} sem={s.sem} session={s.session} initCourses={s.courses||[]} collapsed={s.courses?.length>0} onSave={saveSemester} onDelete={deleteSemester} />))}
           <div style={{ display:"flex", gap:10, marginTop:16 }}>
-            <button style={DS.addMoreBtn} onClick={()=>setShowModal(true)}>+ Add Session</button>
+           {trialLimitReached ? (
+  <div style={{ ...DS.addMoreBtn, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:4, cursor:"not-allowed", opacity:1, background:"#fffbeb", border:"1.5px dashed #fde68a" }} onClick={onPay}>
+    <span style={{ fontSize:"0.85rem", fontWeight:800, color:"#92400e" }}>🔒 Unlock to add more sessions</span>
+    <span style={{ fontSize:"0.72rem", color:"#b45309" }}>Pay ₦299 for full access → all levels, all semesters</span>
+  </div>
+) : (
+  <button style={DS.addMoreBtn} onClick={()=>setShowModal(true)}>+ Add Session</button>
+)}
           </div>
         </>
       )}
