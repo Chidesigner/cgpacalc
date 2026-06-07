@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { usePaystackPayment } from "react-paystack";
 
 /* ─── SUPABASE CONFIG ─────────────────────────────────────── */
 const SUPABASE_URL      = import.meta.env.VITE_SUPABASE_URL      || "";
@@ -875,37 +874,6 @@ const Payment = ({ regNo, cd, onBack, onSuccess }) => {
   const [email, setEmail] = useState("");
   const [showEmailStep, setShowEmailStep] = useState(true);
 
-  const config = {
-    reference: `CGPA-${regNo.replace(/[^A-Z0-9]/g,"")}-${Date.now()}`,
-    email: email,
-    amount: 29900, // ₦299 in kobo
-    publicKey: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY,
-    metadata: { reg_no: regNo },
-  };
-
-  const onPaystackSuccess = async (response) => {
-    setLoading(true);
-    try {
-      // Auto-approve user in Supabase
-      await supabase.from("users").update({
-        status: "approved",
-        approved_at: new Date().toISOString(),
-        paystack_ref: response.reference,
-      }).eq("reg_no", regNo.toUpperCase().trim());
-      onSuccess();
-    } catch(e) {
-      setErr("Payment received but activation failed. Contact support with ref: " + response.reference);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const onPaystackClose = () => {
-    // User closed popup without paying — do nothing
-  };
-
-  const PaystackButton = usePaystackPayment(config);
-
   const handleProceed = () => {
     if (!email.trim() || !email.includes("@")) {
       setErr("Enter a valid email address."); return;
@@ -914,13 +882,54 @@ const Payment = ({ regNo, cd, onBack, onSuccess }) => {
     setShowEmailStep(false);
   };
 
+  const handlePay = () => {
+    const PaystackPop = window.PaystackPop;
+    if (!PaystackPop) {
+      setErr("Paystack failed to load. Check your connection and try again.");
+      return;
+    }
+    const handler = PaystackPop.setup({
+      key: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY,
+      email: email,
+      amount: 29900, // ₦299 in kobo
+      currency: "NGN",
+      ref: `CGPA-${regNo.replace(/[^A-Z0-9]/g,"")}-${Date.now()}`,
+      metadata: { reg_no: regNo },
+      onClose: () => {},
+      callback: async (response) => {
+        setLoading(true);
+        try {
+          await supabase.from("users").update({
+            status: "approved",
+            approved_at: new Date().toISOString(),
+            paystack_ref: response.reference,
+          }).eq("reg_no", regNo.toUpperCase().trim());
+          onSuccess();
+        } catch(e) {
+          setErr("Payment received but activation failed. Contact support with ref: " + response.reference);
+          setLoading(false);
+        }
+      },
+    });
+    handler.openIframe();
+  };
+
+  // Load Paystack script on mount
+  useEffect(() => {
+    if (window.PaystackPop) return;
+    const script = document.createElement("script");
+    script.src = "https://js.paystack.co/v1/inline.js";
+    script.async = true;
+    document.head.appendChild(script);
+  }, []);
+
   if (loading) return (
     <div style={F.wrap} className="page-enter form-card">
       <div style={{ textAlign:"center", padding:"40px 0" }}>
         <div style={{ fontSize:"2.5rem", marginBottom:16 }}>⚡</div>
         <div style={F.chip}>Activating your account</div>
         <h2 style={F.h2}>Almost there...</h2>
-        <p style={F.sub}>Your payment was received. Activating your account now.</p>
+        <p style={F.sub}>Payment received. Activating your account now.</p>
       </div>
     </div>
   );
@@ -931,7 +940,6 @@ const Payment = ({ regNo, cd, onBack, onSuccess }) => {
       <div style={F.chip}>Unlock full access</div>
       <h2 style={F.h2}>One payment. Your degree, sorted.</h2>
 
-      {/* Urgency */}
       <div style={PAY.urgBox}>
         <div style={{ fontSize:"1.4rem" }}>⏱</div>
         <div>
@@ -940,7 +948,6 @@ const Payment = ({ regNo, cd, onBack, onSuccess }) => {
         </div>
       </div>
 
-      {/* What they get */}
       <div style={{ marginBottom:24 }}>
         <div style={F.secLabel}>What ₦299 unlocks — forever</div>
         {[
@@ -966,7 +973,7 @@ const Payment = ({ regNo, cd, onBack, onSuccess }) => {
       {showEmailStep ? (
         <>
           <p style={{ fontSize:"0.82rem", color:"#64748b", marginBottom:10, lineHeight:1.6 }}>
-            Enter your email to receive your payment receipt from Paystack.
+            Enter your email to receive your payment receipt.
           </p>
           <Field label="Email Address" type="email" placeholder="you@example.com" value={email} onChange={setEmail} />
           {err && <Err msg={err} />}
@@ -979,13 +986,13 @@ const Payment = ({ regNo, cd, onBack, onSuccess }) => {
           </div>
           {err && <Err msg={err} />}
           <button
-            style={{ ...F.primaryBtn, background:"#059669", display:"flex", alignItems:"center", justifyContent:"center", gap:10 }}
-            onClick={() => PaystackButton({ onSuccess: onPaystackSuccess, onClose: onPaystackClose })}
+            style={{ ...F.primaryBtn, display:"flex", alignItems:"center", justifyContent:"center", gap:10 }}
+            onClick={handlePay}
           >
             <span>🔒</span> Pay ₦299 Securely with Paystack →
           </button>
           <div style={{ textAlign:"center", fontSize:"0.68rem", color:"#94a3b8", marginTop:10 }}>
-            Secured by Paystack · Card, Bank Transfer, USSD supported · Instant activation
+            Secured by Paystack · Card, Bank Transfer, USSD · Instant activation
           </div>
         </>
       )}
