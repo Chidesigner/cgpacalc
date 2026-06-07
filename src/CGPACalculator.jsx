@@ -1622,6 +1622,7 @@ export default function App() {
   const afterRegister=(r,u)=>{ setRegNo(r);setUserData(u);setIsTrial(true);setScreen("dash");sessionStorage.setItem("cgpa_sess",JSON.stringify({r,trial:true})); };
   const logout=()=>{ sessionStorage.removeItem("cgpa_sess");setRegNo("");setUserData(null);setIsTrial(false);setScreen("landing"); };
   const goToPayment=()=>setScreen("payment");
+const returnFromPayment=()=>setScreen("dash");
 
   if (screen==="loading") return (
     <>
