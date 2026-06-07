@@ -883,36 +883,35 @@ const Payment = ({ regNo, cd, onBack, onSuccess }) => {
   };
 
   const handlePay = () => {
-    const PaystackPop = window.PaystackPop;
-    if (!PaystackPop) {
-      setErr("Paystack failed to load. Check your connection and try again.");
-      return;
-    }
-    const handler = PaystackPop.setup({
-      key: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY,
-      email: email,
-      amount: 29900, // ₦299 in kobo
-      currency: "NGN",
-      ref: `CGPA-${regNo.replace(/[^A-Z0-9]/g,"")}-${Date.now()}`,
-      metadata: { reg_no: regNo },
-      onClose: () => {},
-      callback: async (response) => {
-        setLoading(true);
-        try {
-          await supabase.from("users").update({
-            status: "approved",
-            approved_at: new Date().toISOString(),
-            paystack_ref: response.reference,
-          }).eq("reg_no", regNo.toUpperCase().trim());
-          onSuccess();
-        } catch(e) {
+  const PaystackPop = window.PaystackPop;
+  if (!PaystackPop) {
+    setErr("Paystack failed to load. Check your connection and try again.");
+    return;
+  }
+  const handler = PaystackPop.setup({
+    key: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY,
+    email: email,
+    amount: 29900,
+    currency: "NGN",
+    ref: `CGPA-${regNo.replace(/[^A-Z0-9]/g,"")}-${Date.now()}`,
+    metadata: { reg_no: regNo },
+    onClose: function() {},
+    callback: function(response) {
+      setLoading(true);
+      supabase.from("users").update({
+        status: "approved",
+        approved_at: new Date().toISOString(),
+        paystack_ref: response.reference,
+      }).eq("reg_no", regNo.toUpperCase().trim())
+        .then(() => { onSuccess(); })
+        .catch((e) => {
           setErr("Payment received but activation failed. Contact support with ref: " + response.reference);
           setLoading(false);
-        }
-      },
-    });
-    handler.openIframe();
-  };
+        });
+    },
+  });
+  handler.openIframe();
+};
 
   // Load Paystack script on mount
   useEffect(() => {
