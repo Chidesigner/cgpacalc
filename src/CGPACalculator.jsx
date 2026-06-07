@@ -1475,12 +1475,6 @@ const AdminDashboard = ({ onLogout }) => {
   };
 
   const revoke = async (regNo) => {
-    if (!window.confirm(`Revoke access for ${regNo}?`)) return;
-    await supabase.from("users").update({ status:"pending" }).eq("reg_no",regNo);
-    setUsers(p=>p.map(u=>u.reg_no===regNo?{...u,status:"pending"}:u));
-  };
-
-  const revoke = async (regNo) => {
   if (!window.confirm(`Revoke access for ${regNo}?`)) return;
   await supabase.from("users").update({ status:"pending" }).eq("reg_no",regNo);
   setUsers(p=>p.map(u=>u.reg_no===regNo?{...u,status:"pending"}:u));
