@@ -769,6 +769,59 @@ const Landing = ({ cd, onRegister, onLogin }) => {
   );
 };
 
+const ForgotPassword = ({ onBack }) => {
+  const [reg, setReg] = useState("");
+  const [newPin, setNewPin] = useState("");
+  const [newPin2, setNewPin2] = useState("");
+  const [err, setErr] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [done, setDone] = useState(false);
+
+  const handle = async () => {
+    if (!reg.trim()) { setErr("Enter your matriculation number."); return; }
+    if (newPin.length < 4) { setErr("Password must be at least 4 characters."); return; }
+    if (newPin !== newPin2) { setErr("Passwords don't match."); return; }
+    setLoading(true); setErr("");
+    try {
+      const exists = await DB.userExists(reg);
+      if (!exists) { setErr("No account found with that reg number."); return; }
+      const hash = await hashPin(newPin);
+      const { error } = await supabase.from("users")
+        .update({ pin_hash: hash })
+        .eq("reg_no", reg.toUpperCase().trim());
+      if (error) throw new Error(error.message);
+      setDone(true);
+    } catch(e) { setErr(e.message); }
+    finally { setLoading(false); }
+  };
+
+  if (done) return (
+    <div style={F.wrap} className="page-enter form-card">
+      <div style={{ textAlign:"center" }}>
+        <div style={{ fontSize:"3rem", marginBottom:16 }}>✅</div>
+        <div style={F.chip}>Password updated</div>
+        <h2 style={F.h2}>You're good to go.</h2>
+        <p style={F.sub}>Your password has been reset. Log in with your new password.</p>
+        <PrimaryBtn onClick={onBack}>Go to Login →</PrimaryBtn>
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={F.wrap} className="page-enter form-card">
+      <button style={F.back} onClick={onBack}>← Back to login</button>
+      <div style={F.chip}>Reset password</div>
+      <h2 style={F.h2}>Forgot your password?</h2>
+      <p style={F.sub}>Enter your reg number and choose a new password.</p>
+      <Field label="Matriculation / Reg Number" placeholder="e.g. 2021/233550" value={reg} onChange={setReg} upper />
+      <Field label="New password" type="password" placeholder="Min 4 characters" value={newPin} onChange={setNewPin} />
+      <Field label="Confirm new password" type="password" placeholder="Repeat new password" value={newPin2} onChange={setNewPin2} />
+      {err && <Err msg={err} />}
+      <PrimaryBtn onClick={handle} loading={loading}>Reset Password →</PrimaryBtn>
+    </div>
+  );
+};
+
 /* ═══════════════════════════════════════════════════════════
    REGISTER
 ═══════════════════════════════════════════════════════════ */
@@ -808,7 +861,7 @@ const Register = ({ onBack, onSuccess }) => {
 /* ═══════════════════════════════════════════════════════════
    LOGIN
 ═══════════════════════════════════════════════════════════ */
-const Login = ({ onBack, onApproved, onPending, onTrial }) => {
+const Login = ({ onBack, onApproved, onPending, onTrial, onForgot }) => {
   const [reg,setReg]=useState(""); const [pin,setPin]=useState("");
   const [err,setErr]=useState(""); const [loading,setLoading]=useState(false);
 
@@ -837,6 +890,9 @@ const Login = ({ onBack, onApproved, onPending, onTrial }) => {
       <Field label="Password" type="password" placeholder="Your password" value={pin} onChange={setPin} />
       {err && <Err msg={err} />}
       <PrimaryBtn onClick={handle} loading={loading}>Log In →</PrimaryBtn>
+      <div style={{ textAlign:"center", marginTop:10 }}>
+  <span style={{ fontSize:"0.78rem", color:"#059669", cursor:"pointer", textDecoration:"underline" }} onClick={() => onForgot()}>Forgot password?</span>
+</div>
     </div>
   );
 };
@@ -1457,12 +1513,6 @@ const AdminDashboard = ({ onLogout }) => {
   };
 
   const revoke = async (regNo) => {
-    if (!window.confirm(`Revoke access for ${regNo}?`)) return;
-    await supabase.from("users").update({ status:"pending" }).eq("reg_no",regNo);
-    setUsers(p=>p.map(u=>u.reg_no===regNo?{...u,status:"pending"}:u));
-  };
-
-  const revoke = async (regNo) => {
   if (!window.confirm(`Revoke access for ${regNo}?`)) return;
   await supabase.from("users").update({ status:"pending" }).eq("reg_no",regNo);
   setUsers(p=>p.map(u=>u.reg_no===regNo?{...u,status:"pending"}:u));
@@ -1610,6 +1660,7 @@ export default function App() {
   const afterRegister=(r,u)=>{ setRegNo(r);setUserData(u);setIsTrial(true);setScreen("dash");sessionStorage.setItem("cgpa_sess",JSON.stringify({r,trial:true})); };
   const logout=()=>{ sessionStorage.removeItem("cgpa_sess");setRegNo("");setUserData(null);setIsTrial(false);setScreen("landing"); };
   const goToPayment=()=>setScreen("payment");
+const returnFromPayment=()=>setScreen("dash");
 
   if (screen==="loading") return (
     <>
@@ -1641,7 +1692,8 @@ export default function App() {
           <>
             {screen==="landing"&&<Landing cd={cd} onRegister={()=>setScreen("register")} onLogin={()=>setScreen("login")} />}
             {screen==="register"&&<Register onBack={()=>setScreen("landing")} onSuccess={afterRegister} />}
-            {screen==="login"&&<Login onBack={()=>setScreen("landing")} onApproved={afterApproved} onPending={afterPending} onTrial={afterTrial} />}
+            {screen==="login"&&<Login onBack={()=>setScreen("landing")} onApproved={afterApproved} onPending={afterPending} onTrial={afterTrial} onForgot={()=>setScreen("forgot")} />}
+            {screen==="forgot"&&<ForgotPassword onBack={()=>setScreen("login")} />}
             {screen==="pending-approval"&&<PendingApproval regNo={regNo} onBack={()=>setScreen("login")} />}
             {screen==="payment"&&<div style={{ width:"100%", maxWidth:700, marginTop:20 }}><Payment regNo={regNo} cd={cd} onBack={()=>setScreen("dash")} onSubmitted={()=>setScreen("dash")} /></div>}
             {screen==="dash"&&userData&&<Dashboard regNo={regNo} userData={userData} isTrial={isTrial} onLogout={logout} onPay={goToPayment} />}
@@ -1764,6 +1816,31 @@ const globalStyles = `
     .hero-h { font-size:clamp(2.2rem,10vw,3.5rem) !important; }
     .cta-box { padding:24px 16px !important; }
     .stat-card { width:100%; }
+
+    /* CGPA result section */
+.cgpa-result-wrap { padding: 20px 14px !important; }
+.cgpa-number { font-size: 3.2rem !important; }
+.cgpa-badges { gap: 4px !important; }
+.cgpa-badges span { font-size: 0.6rem !important; padding: 2px 7px !important; }
+
+/* IT panel */
+.it-panel-enter { padding: 10px 10px 8px !important; }
+.it-grade-row { gap: 5px !important; }
+.it-grade-btn { width: 38px !important; height: 38px !important; font-size: 0.8rem !important; }
+.it-quick-chips { gap: 4px !important; }
+.it-quick-chips button { padding: 6px 10px !important; font-size: 0.7rem !important; }
+
+/* Semester header */
+.sem-header-wrap { flex-wrap: wrap; gap: 6px !important; }
+.sem-header-wrap span { font-size: 0.78rem !important; }
+
+/* Bank card on payment */
+.bank-card-wrap { padding: 14px 12px !important; }
+.bank-acct-num { font-size: 1rem !important; letter-spacing: 0.05em !important; }
+
+/* Stats box */
+.stats-box-wrap { gap: 8px !important; }
+.stats-box-wrap span { font-size: 0.6rem !important; }
   }
   @media (max-width:380px) {
     .grade-btn { width:32px !important; height:34px !important; font-size:0.75rem !important; }
@@ -1856,7 +1933,7 @@ const PAY = {
 };
 
 const D = {
-  cgpaBig:   { background:"linear-gradient(135deg,#f0fdf4,#f0f9ff)", border:"1px solid #e2e8f0", borderRadius:20, padding:"32px", textAlign:"center", marginBottom:16, boxShadow:"0 2px 16px rgba(0,0,0,0.04)" },
+  cgpaBig: { background:"linear-gradient(135deg,#f0fdf4,#f0f9ff)", border:"1px solid #e2e8f0", borderRadius:20, padding:"24px 16px", textAlign:"center", marginBottom:16, boxShadow:"0 2px 16px rgba(0,0,0,0.04)" },
   summaryBox:{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:14, padding:"18px", marginBottom:16 },
   scaleBox:  { background:"#fafaf9", border:"1px solid #f1f5f9", borderRadius:14, padding:"16px", marginTop:20 },
   emptyState:{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:16, padding:"48px 20px", textAlign:"center" },
