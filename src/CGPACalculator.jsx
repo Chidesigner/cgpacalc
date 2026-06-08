@@ -868,132 +868,115 @@ const PendingApproval = ({ regNo, onBack }) => {
 /* ═══════════════════════════════════════════════════════════
    PAYMENT PAGE
 ═══════════════════════════════════════════════════════════ */
-const Payment = ({ regNo, cd, onBack, onSuccess }) => {
-  const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState("");
-  const [email, setEmail] = useState("");
-  const [showEmailStep, setShowEmailStep] = useState(true);
+const Payment = ({ regNo, cd, onBack, onSubmitted }) => {
+  const [step,setStep]=useState("info"); const [file,setFile]=useState(null);
+  const [preview,setPreview]=useState(null); const [loading,setLoading]=useState(false);
+  const [err,setErr]=useState(""); const fileRef=useRef(); const [copied,copy]=useCopy();
 
-  const handleProceed = () => {
-    if (!email.trim() || !email.includes("@")) {
-      setErr("Enter a valid email address."); return;
-    }
-    setErr("");
-    setShowEmailStep(false);
+  const handleFile = (e) => {
+    const f=e.target.files[0]; if(!f) return;
+    if(f.size>8*1024*1024) { setErr("Max 8MB"); return; }
+    setFile(f); const r=new FileReader(); r.onload=ev=>setPreview(ev.target.result); r.readAsDataURL(f);
   };
 
-  const handlePay = () => {
-  const PaystackPop = window.PaystackPop;
-  if (!PaystackPop) {
-    setErr("Paystack failed to load. Check your connection and try again.");
-    return;
-  }
-  const handler = PaystackPop.setup({
-    key: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY,
-    email: email,
-    amount: 29900,
-    currency: "NGN",
-    ref: `CGPA-${regNo.replace(/[^A-Z0-9]/g,"")}-${Date.now()}`,
-    metadata: { reg_no: regNo },
-    onClose: function() {},
-    callback: function(response) {
-      setLoading(true);
-      supabase.from("users").update({
-        status: "approved",
-        approved_at: new Date().toISOString(),
-        paystack_ref: response.reference,
-      }).eq("reg_no", regNo.toUpperCase().trim())
-        .then(() => { onSuccess(); })
-        .catch((e) => {
-          setErr("Payment received but activation failed. Contact support with ref: " + response.reference);
-          setLoading(false);
-        });
-    },
-  });
-  handler.openIframe();
-};
+  const handleSubmit = async () => {
+    if(!file) { setErr("Upload your receipt screenshot first."); return; }
+    setLoading(true); setErr("");
+    try { await DB.uploadReceipt(regNo, file); setStep("pending"); }
+    catch(e) { setErr("Upload failed: "+e.message); }
+    finally { setLoading(false); }
+  };
 
-  // Load Paystack script on mount
-  useEffect(() => {
-    if (window.PaystackPop) return;
-    const script = document.createElement("script");
-    script.src = "https://js.paystack.co/v1/inline.js";
-    script.async = true;
-    document.head.appendChild(script);
-  }, []);
-
-  if (loading) return (
-    <div style={F.wrap} className="page-enter form-card">
-      <div style={{ textAlign:"center", padding:"40px 0" }}>
-        <div style={{ fontSize:"2.5rem", marginBottom:16 }}>⚡</div>
-        <div style={F.chip}>Activating your account</div>
-        <h2 style={F.h2}>Almost there...</h2>
-        <p style={F.sub}>Payment received. Activating your account now.</p>
-      </div>
-    </div>
-  );
+  const waMsg = encodeURIComponent(`Hi! I just paid ₦299 for CGPACalc.\nReg No: ${regNo}\nPlease activate my account.`);
 
   return (
     <div style={F.wrap} className="page-enter form-card">
-      <button style={F.back} onClick={onBack}>← Back to dashboard</button>
-      <div style={F.chip}>Unlock full access</div>
-      <h2 style={F.h2}>One payment. Your degree, sorted.</h2>
+      {step==="info" && (
+        <>
+          <button style={F.back} onClick={onBack}>← Back to dashboard</button>
+          <div style={F.chip}>Unlock full access</div>
+          <h2 style={F.h2}>One payment. Your degree, sorted.</h2>
+          <div style={PAY.urgBox}>
+            <div style={{ fontSize:"1.4rem", marginBottom:6 }}>⏱</div>
+            <div>
+              <div style={{ fontWeight:800, fontSize:"0.9rem", color:"#0f172a" }}>Offer expires in <span style={{ color:"#dc2626", fontFamily:"var(--mono)" }}>{cd}</span></div>
+              <div style={{ fontSize:"0.75rem", color:"#64748b", marginTop:2 }}>After this, the price returns to ₦2,000 and stays there permanently.</div>
+            </div>
+          </div>
+          <div style={{ marginBottom:24 }}>
+            <div style={F.secLabel}>What ₦299 unlocks — forever</div>
+            {[
+              "✓  Every semester, every level — tracked and saved forever",
+              "✓  CGPA calculated cumulatively across your entire degree",
+              "✓  Semester-by-semester GPA breakdown",
+              "✓  Degree classification shown in real time",
+              "✓  What-if simulator: see what score you need to hit your target",
+              "✓  IT/SIWES courses handled correctly — no guessing",
+              "✓  Downloadable Transcript Summary PDF — for NYSC, jobs, postgrad",
+              "✓  Access from any device, anytime, forever",
+            ].map(t => (
+              <div key={t} style={{ fontSize:"0.87rem", color:"#374151", padding:"8px 0", borderBottom:"1px solid #f1f5f9", lineHeight:1.5 }}>{t}</div>
+            ))}
+          </div>
+          <div style={PAY.priceRow}>
+            <span style={{ fontFamily:"var(--mono)", fontSize:"1rem", color:"#94a3b8", textDecoration:"line-through" }}>₦2,000</span>
+            <span style={{ fontFamily:"var(--display)", fontSize:"3.2rem", color:"#059669", lineHeight:1 }}>₦299</span>
+            <span style={PAY.badge}>85% OFF</span>
+          </div>
+          <PrimaryBtn onClick={() => setStep("receipt")} style={{ width:"100%" }}>Pay ₦299 & Unlock Everything →</PrimaryBtn>
+        </>
+      )}
 
-      <div style={PAY.urgBox}>
-        <div style={{ fontSize:"1.4rem" }}>⏱</div>
-        <div>
-          <div style={{ fontWeight:800, fontSize:"0.9rem", color:"#0f172a" }}>Offer expires in <span style={{ color:"#dc2626", fontFamily:"var(--mono)" }}>{cd}</span></div>
-          <div style={{ fontSize:"0.75rem", color:"#64748b", marginTop:2 }}>After this, the price returns to ₦2,000 permanently.</div>
+      {step==="receipt" && (
+        <>
+          <button style={F.back} onClick={() => setStep("info")}>← Back</button>
+          <div style={F.chip}>Payment</div>
+          <h2 style={F.h2}>Transfer ₦299</h2>
+          <p style={F.sub}>Send exactly ₦299 to the account below, then upload your screenshot.</p>
+          <div style={PAY.bankCard}>
+            {[["Bank",BANK.bank],["Name",BANK.name]].map(([l,v]) => (
+              <div key={l} style={PAY.bankRow}><span style={PAY.bankLbl}>{l}</span><span style={PAY.bankVal}>{v}</span></div>
+            ))}
+            <div style={PAY.bankRow}>
+              <span style={PAY.bankLbl}>Account No.</span>
+              <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                <span style={{ fontFamily:"var(--mono)", fontWeight:800, fontSize:"1.3rem", color:"#0f172a", letterSpacing:"0.1em" }}>{BANK.number}</span>
+                <button style={PAY.copyBtn} onClick={() => copy(BANK.number)}>{copied ? "✓ Copied" : "Copy"}</button>
+              </div>
+            </div>
+            <div style={PAY.bankRow}><span style={PAY.bankLbl}>Amount</span><span style={{ fontFamily:"var(--mono)", fontWeight:800, color:"#059669", fontSize:"1.1rem" }}>₦299 exactly</span></div>
+          </div>
+          <input ref={fileRef} type="file" accept="image/*" style={{ display:"none" }} onChange={handleFile} />
+          {!preview ? (
+            <div style={PAY.uploadZone} onClick={() => fileRef.current.click()}>
+              <div style={{ fontSize:"2.5rem", marginBottom:10 }}>📎</div>
+              <div style={{ fontWeight:700, color:"#374151", marginBottom:4 }}>Upload receipt screenshot</div>
+              <div style={{ fontSize:"0.75rem", color:"#94a3b8" }}>PNG, JPG · max 8MB</div>
+            </div>
+          ) : (
+            <div style={{ position:"relative", marginBottom:16 }}>
+              <img src={preview} alt="receipt" style={{ width:"100%", borderRadius:12, maxHeight:220, objectFit:"cover" }} />
+              <button style={{ position:"absolute", top:8, right:8, background:"rgba(0,0,0,0.7)", border:"none", borderRadius:6, color:"#fff", padding:"4px 10px", cursor:"pointer", fontSize:"0.72rem", fontFamily:"var(--mono)" }} onClick={() => { setFile(null); setPreview(null); }}>Change</button>
+            </div>
+          )}
+          {err && <Err msg={err} />}
+          <PrimaryBtn onClick={handleSubmit} loading={loading} style={{ width:"100%" }}>Submit Receipt →</PrimaryBtn>
+        </>
+      )}
+
+      {step==="pending" && (
+        <div style={{ textAlign:"center", paddingTop:20 }}>
+          <div style={{ fontSize:"3.5rem", marginBottom:16 }}>🎉</div>
+          <div style={F.chip}>Receipt submitted!</div>
+          <h2 style={F.h2}>You're almost in.</h2>
+          <p style={F.sub}>Payment is being reviewed. Access granted within <strong>30 minutes</strong> during the day — usually faster.</p>
+          <div style={PAY.pendingBox}>
+            <div style={{ fontSize:"0.65rem", color:"#64748b", marginBottom:4 }}>Account registered for</div>
+            <div style={{ fontFamily:"var(--mono)", fontWeight:800, fontSize:"1.1rem", color:"#0f172a" }}>{regNo}</div>
+          </div>
+          <a href={`https://wa.me/${WHATSAPP}?text=${waMsg}`} target="_blank" rel="noreferrer" style={PAY.waBtn}>💬 Message on WhatsApp for faster approval →</a>
+          <button style={{ ...F.ghostBtn, width:"100%", marginTop:12 }} onClick={onSubmitted}>Return to dashboard →</button>
         </div>
-      </div>
-
-      <div style={{ marginBottom:24 }}>
-        <div style={F.secLabel}>What ₦299 unlocks — forever</div>
-        {[
-          "✓  Every semester, every level — tracked and saved forever",
-          "✓  CGPA calculated cumulatively across your entire degree",
-          "✓  Semester-by-semester GPA breakdown",
-          "✓  Degree classification shown in real time",
-          "✓  What-if simulator: see what score you need",
-          "✓  IT/SIWES courses handled correctly",
-          "✓  Downloadable Transcript Summary PDF",
-          "✓  Access from any device, anytime, forever",
-        ].map(t => (
-          <div key={t} style={{ fontSize:"0.87rem", color:"#374151", padding:"8px 0", borderBottom:"1px solid #f1f5f9", lineHeight:1.5 }}>{t}</div>
-        ))}
-      </div>
-
-      <div style={PAY.priceRow}>
-        <span style={{ fontFamily:"var(--mono)", fontSize:"1rem", color:"#94a3b8", textDecoration:"line-through" }}>₦2,000</span>
-        <span style={{ fontFamily:"var(--display)", fontSize:"3.2rem", color:"#059669", lineHeight:1 }}>₦299</span>
-        <span style={PAY.badge}>85% OFF</span>
-      </div>
-
-      {showEmailStep ? (
-        <>
-          <p style={{ fontSize:"0.82rem", color:"#64748b", marginBottom:10, lineHeight:1.6 }}>
-            Enter your email to receive your payment receipt.
-          </p>
-          <Field label="Email Address" type="email" placeholder="you@example.com" value={email} onChange={setEmail} />
-          {err && <Err msg={err} />}
-          <PrimaryBtn onClick={handleProceed}>Continue to Payment →</PrimaryBtn>
-        </>
-      ) : (
-        <>
-          <div style={{ background:"#f0fdf4", border:"1px solid #bbf7d0", borderRadius:10, padding:"12px 16px", marginBottom:16, fontSize:"0.8rem", color:"#065f46" }}>
-            ✓ Paying as <strong>{email}</strong> · <span style={{ color:"#059669", cursor:"pointer", textDecoration:"underline" }} onClick={() => setShowEmailStep(true)}>change</span>
-          </div>
-          {err && <Err msg={err} />}
-          <button
-            style={{ ...F.primaryBtn, display:"flex", alignItems:"center", justifyContent:"center", gap:10 }}
-            onClick={handlePay}
-          >
-            <span>🔒</span> Pay ₦299 Securely with Paystack →
-          </button>
-          <div style={{ textAlign:"center", fontSize:"0.68rem", color:"#94a3b8", marginTop:10 }}>
-            Secured by Paystack · Card, Bank Transfer, USSD · Instant activation
-          </div>
-        </>
       )}
     </div>
   );
@@ -1474,6 +1457,12 @@ const AdminDashboard = ({ onLogout }) => {
   };
 
   const revoke = async (regNo) => {
+    if (!window.confirm(`Revoke access for ${regNo}?`)) return;
+    await supabase.from("users").update({ status:"pending" }).eq("reg_no",regNo);
+    setUsers(p=>p.map(u=>u.reg_no===regNo?{...u,status:"pending"}:u));
+  };
+
+  const revoke = async (regNo) => {
   if (!window.confirm(`Revoke access for ${regNo}?`)) return;
   await supabase.from("users").update({ status:"pending" }).eq("reg_no",regNo);
   setUsers(p=>p.map(u=>u.reg_no===regNo?{...u,status:"pending"}:u));
@@ -1621,7 +1610,6 @@ export default function App() {
   const afterRegister=(r,u)=>{ setRegNo(r);setUserData(u);setIsTrial(true);setScreen("dash");sessionStorage.setItem("cgpa_sess",JSON.stringify({r,trial:true})); };
   const logout=()=>{ sessionStorage.removeItem("cgpa_sess");setRegNo("");setUserData(null);setIsTrial(false);setScreen("landing"); };
   const goToPayment=()=>setScreen("payment");
-const returnFromPayment=()=>setScreen("dash");
 
   if (screen==="loading") return (
     <>
@@ -1655,7 +1643,7 @@ const returnFromPayment=()=>setScreen("dash");
             {screen==="register"&&<Register onBack={()=>setScreen("landing")} onSuccess={afterRegister} />}
             {screen==="login"&&<Login onBack={()=>setScreen("landing")} onApproved={afterApproved} onPending={afterPending} onTrial={afterTrial} />}
             {screen==="pending-approval"&&<PendingApproval regNo={regNo} onBack={()=>setScreen("login")} />}
-            {screen==="payment"&&<div style={{ width:"100%", maxWidth:700, marginTop:20 }}><Payment regNo={regNo} cd={cd} onBack={returnFromPayment} onSuccess={async () => { const freshUser = await DB.getUser(regNo); setUserData(freshUser); setIsTrial(false); sessionStorage.setItem("cgpa_sess", JSON.stringify({r:regNo, trial:false})); setScreen("dash"); }} /></div>}
+            {screen==="payment"&&<div style={{ width:"100%", maxWidth:700, marginTop:20 }}><Payment regNo={regNo} cd={cd} onBack={()=>setScreen("dash")} onSubmitted={()=>setScreen("dash")} /></div>}
             {screen==="dash"&&userData&&<Dashboard regNo={regNo} userData={userData} isTrial={isTrial} onLogout={logout} onPay={goToPayment} />}
           </>
         )}
